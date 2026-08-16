@@ -1,0 +1,38 @@
+# Multi-node Spark cluster for the scalability study.
+#   Build:   docker compose -f docker/docker-compose.yml build
+#   Up (N workers):
+#            docker compose -f docker/docker-compose.yml up -d --scale spark-worker=4
+#   Master UI: http://localhost:8080
+#
+# The whole repository is mounted read/write at /work inside every container, so
+# code/ , CMAPSSData/ and results/ are visible cluster-wide.
+#
+# NOTE: commands are given as YAML lists (exec form) on purpose — a folded ">"
+# block scalar can preserve a newline and break "bash -c", which stops the
+# worker from ever receiving its master URL.
+services:
+  spark-master:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: cmapss-spark:4.1.2
+    container_name: spark-master
+    command: ["spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master", "--port", "7077", "--webui-port", "8080"]
+    ports:
+      - "8080:8080"   # master web UI
+      - "7077:7077"   # cluster endpoint
+    volumes:
+      - ..:/work
+    networks: [spark-net]
+
+  spark-worker:
+    image: cmapss-spark:4.1.2
+    command: ["spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077", "--cores", "2", "--memory", "2g"]
+    depends_on: [spark-master]
+    volumes:
+      - ..:/work
+    networks: [spark-net]
+
+networks:
+  spark-net:
+    driver: bridge
